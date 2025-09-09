@@ -15,7 +15,7 @@ function waitForLoadedData(video) {
 	});
 }
 
-export async function decodeMp4ToCanvas({ file, canvas, onStatus, videoEl }) {
+export async function decodeMp4ToCanvas({ file, canvas, onStatus, videoEl, __onRendered }) {
 	const url = URL.createObjectURL(file);
 	const video = videoEl || document.createElement('video');
 	video.src = url;
@@ -64,6 +64,7 @@ export async function decodeMp4ToCanvas({ file, canvas, onStatus, videoEl }) {
 					ctx.drawImage(bitmap, 0, 0);
 					bitmap.close();
 					frameCount++;
+					__onRendered?.();
 					if (frameCount % 30 === 0) log('Rendered frames:', frameCount);
 				} finally {
 					videoFrame.close();
@@ -77,6 +78,7 @@ export async function decodeMp4ToCanvas({ file, canvas, onStatus, videoEl }) {
 			if (stop) return resolveStop?.();
 			ctx.drawImage(video, 0, 0);
 			frameCount++;
+			__onRendered?.();
 			if (frameCount % 30 === 0) log('Rendered frames:', frameCount);
 			if (video.requestVideoFrameCallback) {
 				video.requestVideoFrameCallback(() => render());

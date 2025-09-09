@@ -1,7 +1,7 @@
 import { parseIvf, isVp8Keyframe } from './ivf.js';
 import { log } from './logger.js';
 
-export async function decodeIvfToCanvas({ file, canvas, onStatus }) {
+export async function decodeIvfToCanvas({ file, canvas, onStatus, __onRendered, __onChunk, __onError }) {
 	if (!('VideoDecoder' in globalThis)) throw new Error('VideoDecoder not supported');
 
 	onStatus?.('Reading file...');
@@ -20,6 +20,7 @@ export async function decodeIvfToCanvas({ file, canvas, onStatus }) {
 			const bitmap = await createImageBitmap(videoFrame);
 			ctx.drawImage(bitmap, 0, 0);
 			bitmap.close();
+			__onRendered?.();
 		} finally {
 			videoFrame.close();
 		}
@@ -36,6 +37,7 @@ export async function decodeIvfToCanvas({ file, canvas, onStatus }) {
 		},
 		error: (e) => {
 			log('VideoDecoder error:', e);
+			__onError?.();
 		},
 	});
 
@@ -56,6 +58,7 @@ export async function decodeIvfToCanvas({ file, canvas, onStatus }) {
 			data,
 		});
 		decoder.decode(chunk);
+		__onChunk?.();
 		if (i % 30 === 0) log('Decoded chunks fed:', i + 1);
 
 		const msPerFrame = 1000 / (header.timebaseDen / header.timebaseNum);

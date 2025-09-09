@@ -3,12 +3,27 @@ import { encodeCanvasToIvf } from './encoder.js';
 import { decodeIvfToCanvas } from './decoder.js';
 import { decodeMp4ToCanvas } from './mp4.js';
 import { log, setLogTarget } from './logger.js';
+import { Stats } from './stats.js';
 
 const $ = (id) => document.getElementById(id);
 
 function setStatus(el, text) {
 	el.textContent = text;
 	log('STATUS:', text);
+}
+
+// Stats
+const stats = new Stats($('stats'));
+let statsTimer = null;
+function startStats() {
+	stats.reset();
+	if (statsTimer) clearInterval(statsTimer);
+	statsTimer = setInterval(() => stats.render(), 250);
+}
+function stopStats() {
+	if (statsTimer) clearInterval(statsTimer);
+	statsTimer = null;
+	stats.render();
 }
 
 // Capabilities wiring
@@ -124,6 +139,7 @@ function setStatus(el, text) {
 		if (!fileInput.files?.length) return;
 		btnDecode.disabled = true;
 		btnStop.disabled = true;
+		startStats();
 		setStatus(statusEl, 'Decoding...');
 		try {
 			const file = fileInput.files[0];
@@ -135,16 +151,31 @@ function setStatus(el, text) {
 				log('Routing to IVF decoder');
 				showCanvasOnly();
 				btnStop.disabled = false;
-				stopFn = await decodeIvfToCanvas({ file, canvas, onStatus: (s) => setStatus(statusEl, s) });
+				// Wrap decodeIvfToCanvas to count frames rendered
+				stopFn = await decodeIvfToCanvas({
+					file,
+					canvas,
+					onStatus: (s) => setStatus(statusEl, s),
+					__onRendered: () => { stats.markRendered(1); stats.render(); },
+					__onChunk: () => stats.markDecoded(1),
+					__onError: () => stats.markError(1),
+				});
 			} else {
 				log('Routing to MP4 path');
 				showVideoAndCanvas();
 				btnStop.disabled = false;
-				stopFn = await decodeMp4ToCanvas({ file, canvas, onStatus: (s) => setStatus(statusEl, s), videoEl });
+				stopFn = await decodeMp4ToCanvas({
+					file,
+					canvas,
+					onStatus: (s) => setStatus(statusEl, s),
+					videoEl,
+					__onRendered: () => { stats.markRendered(1); stats.render(); },
+				});
 			}
 			setStatus(statusEl, 'Playing');
 		} catch (err) {
 			log('Decode error:', err);
+			stats.markError(1);
 			setStatus(statusEl, `Error: ${String(err?.message || err)}`);
 		} finally {
 			btnDecode.disabled = false;
@@ -155,6 +186,7 @@ function setStatus(el, text) {
 		log('Stop requested');
 		stopFn?.();
 		btnStop.disabled = true;
+		stopStats();
 		setStatus(statusEl, 'Stopped');
 	});
 })();
